@@ -13,6 +13,8 @@ This material is divided in two parts. One of them consist of detecting and meas
 	HCS-Check results.ijm
 	
 	detection macro.ijm
+	
+Download this set of [images](https://drive.google.com/open?id=1F6ZBhwxCxLeJn1DySYX7s2bK2WhRPR-4) to check the macro.
 						
 2.- workflows of examples to work on Machine Learning techniques using [Orange](https://orange.biolab.si/).
 
@@ -27,3 +29,5 @@ This material is divided in two parts. One of them consist of detecting and meas
 	HCS Hierarchical Clustering
 	
 	HCS kNN Supervised Learning
+	
+Download the files called "ex_plate_data.xls" and "ex_plate_data_class.xls" to test the workflows.
