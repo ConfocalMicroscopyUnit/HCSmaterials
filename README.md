@@ -18,16 +18,16 @@ Download this set of [images](https://drive.google.com/open?id=1F6ZBhwxCxLeJn1Dy
 						
 2.- workflows of examples to work on Machine Learning techniques using [Orange](https://orange.biolab.si/).
 
-	HCS Heat Map
+	HCS Heat Map.ows
 	
-	HCS Feature Selection
+	HCS Feature Selection.ows
 	
-	HCS Principal Component Analysis
+	HCS Principal Component Analysis.ows
 	
-	HCS k-Means Unsupervised Learning
+	HCS k-Means Unsupervised Learning.ows
 	
-	HCS Hierarchical Clustering
+	HCS Hierarchical Clustering.ows
 	
-	HCS kNN Supervised Learning
+	HCS kNN Supervised Learning.ows
 	
 Download the files called "ex_plate_data.xls" and "ex_plate_data_class.xls" to test the workflows.
