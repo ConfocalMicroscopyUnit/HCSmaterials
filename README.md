@@ -1,1 +1,18 @@
 # HCSmaterials
+
+You can find here all the material which is referenced in the chapter titled "High content screening methodology for helping in a lab scale image based assays" in the book "TODO".
+
+This material is divided in two parts. One of them consist of detecting and measuring the objects into an experiment of images and the second one is to analyse the measures obtained in the first part, using Machine Learning techniques.
+      
+			1.- macro to detect and measure objects. These macros are implemented for [ImageJ] (http://imagej.nih.gov/ij/) or [Fiji] (https://fiji.sc/).
+            HCS_Analysis.ijm
+            HCS-Check results.ijm
+            detection macro.ijm
+						
+      2.- workflows of examples to work on Machine Learning techniques using [Orange](https://orange.biolab.si/).
+						HCS Heat Map
+						HCS Feature Selection
+						HCS Principal Component Analysis
+						HCS k-Means Unsupervised Learning
+						HCS Hierarchical Clustering
+						HCS kNN Supervised Learning
