@@ -30,4 +30,4 @@ Download this set of [images](https://drive.google.com/open?id=1F6ZBhwxCxLeJn1Dy
 	
 	HCS kNN Supervised Learning.ows
 	
-Download the files called "ex_plate_data.xls" and "ex_plate_data_class.xls" to test the workflows.
+Download the files called "ex_plate_data.csv" and "ex_plate_data_class.csv" to test the workflows.
