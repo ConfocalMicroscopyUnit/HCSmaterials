@@ -1,4 +1,4 @@
-ROW;COL;area;mean;stdev;class
+ROW;COL;area;mean Intensity;stdev of mean Intensity;class
 3;3;227.797828;103.694003;38.665646;positiveControl
 3;4;243.810432;47.339095;19.622814;negativeControl
 3;5;254.27432;42.987221;15.876706;experimental
