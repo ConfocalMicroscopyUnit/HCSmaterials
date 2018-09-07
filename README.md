@@ -2,7 +2,7 @@
 
 ## HCS materials
 
-You can find here all the material which is referenced in the chapter titled "High content screening methodology for helping in a lab scale image based assays" in the book "TODO".
+You can find here all the material which is referenced in the chapter titled "High content screening methodology for helping in a lab scale image based assays" in Methods in Molecular Biology.
 
 This material is divided in two parts. One of them consist of detecting and measuring the objects into an experiment of images and the second one is to analyse the measures obtained in the first part, using Machine Learning techniques.
       
