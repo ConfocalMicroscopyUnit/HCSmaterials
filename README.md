@@ -14,7 +14,7 @@ This material is divided in two parts. One of them consist of detecting and meas
 	
 	detection macro.ijm
 	
-Download this set of [images](https://drive.google.com/open?id=1F6ZBhwxCxLeJn1DySYX7s2bK2WhRPR-4) to check the macro.
+Download this set of [images](https://drive.google.com/open?id=1F6ZBhwxCxLeJn1DySYX7s2bK2WhRPR-4) to check the macro. The format files should be TIF-file. If the image has to be more than one channel, it has to be a stack where each slice is a channel. You can see an example in the set of the images of previous link.
 						
 2.- workflows of examples to work on Machine Learning techniques using [Orange](https://orange.biolab.si/).
 
