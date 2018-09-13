@@ -39,6 +39,7 @@ if(label==true)
 	if(File.exists(resultsDir+"\\ROIs\\"+replace(File.getName(imageToCheckPath), ".tif", ".tif.zip"))==true)
 	{
 		roiManager("open", resultsDir+"\\ROIs\\"+replace(File.getName(imageToCheckPath), ".tif", ".tif.zip"));
+		resetMinAndMax();
 	}
 	
 	if(nSlices>1)//means that images are multitif (process images as multitif)
@@ -69,7 +70,8 @@ if(label==true)
 			{
 				for(j=1;j<nChannels;j++)
 				{
-					open(imagesDir+imagesNamesArray[i+j]);		
+					open(imagesDir+imagesNamesArray[i+j]);	
+					resetMinAndMax();	
 				}
 			
 			}
@@ -145,9 +147,10 @@ if(label==true)
 		{
 			print(imagesNamesArray[i]+" matches "+ newRegEx);
 			open(imagesDir+imagesNamesArray[i]);
+			resetMinAndMax();
 			id1=getImageID();	
 			roiManager("reset");
-
+	
 			if(File.exists(resultsDir+"\\ROIs\\"+replace(File.getName(imagesNamesArray[i]), ".tif", ".tif.zip"))==true)
 			{
 				roiManager("open", resultsDir+"\\ROIs\\"+replace(File.getName(imagesNamesArray[i]), ".tif", ".tif.zip"));
@@ -160,19 +163,15 @@ if(label==true)
 					setMetadata("Label", imagesNamesArray[i]+"-slice-"+j+1);//images are named after its labels when stacks are splat
 				}
 				if(is("composite"))
-				{
-					run("Hyperstack to Stack");
-					resetMinAndMax();
-					}//transforms composite images to regular stacks
+				{run("Hyperstack to Stack");
+				resetMinAndMax();}//transforms composite images to regular stacks
 				roiManager("show all with labels");
 				if(roiManager("count")>0)
-				{run("Flatten", "stack");}
-				run("Stack to Images");			
+				{run("Flatten", "stack");}			
+				run("Stack to Images");							
 			}
 			else if(nSlices==1 && nChannels>1)//a collection of single .tif images from different channels were captured per field
 			{
-
-					waitForUser("2");
 				roiManager("show all with labels");
 				if(roiManager("count")>0)
 				{run("Flatten", "stack");}
@@ -182,6 +181,7 @@ if(label==true)
 				{
 					i++;
 					open(imagesDir+imagesNamesArray[i]);//Assumes that images are set by creation data
+					resetMinAndMax();
 					id1=getImageID();
 					roiManager("show all with labels");
 					if(roiManager("count")>0)
