@@ -2,47 +2,48 @@
 /* Written by Joquim Soriano Felipe (ximosoriano@yahoo.es).
  * Developed on FIJI, running on ImageJ 1.52c.
  * FIJI is under the General Public License, ImageJ is on the public domain.
- * There is no need to install additional plugins for the macto to work.
+ * There is no need to install additional plugins for this macro to work.
  * HCS-Analysis.ijm was designed as an image analysis routine to be used in .tif  image collections from HCS experiments.
- * HCS-Analysis computes z prime and z values.
+ * HCS-Analysis automatically measures objects on image collections, computes z' and z scores.
  * Image collections should fulfill the following criteria:
  * 	- all images should be on the same folder, no sub-folders are allowed.
  * 	- image's names should code the name of the well the image comes from.
  * 	- only images are expected in the images folder.
- * 	- tif images can either be single channel images or multichannel tif images. Sets of single channel images from different channels are also accepted.
+ * 	- tif images can either be single channel images or multichannel tif images. Sets of single channel images from different channels are accepted.
  * 	- tif images should be ordered based on creation date. On such assumption, images on the same well follow each other as whell as images from different channels on the same field.
  * 	- tif images' names should be the same length. Name's digits coding the well row and column should always occupy the same position.
  * 	In order to run HCS-Analysis simply drag and drop HCS-Analysis.ijm into FIJI's main tool bar and click the Run button on the menu that will pop up. Different graphical users interfaces will guide you through the analysis steps.
  * 	HCS-Analysis detects objects based on pixel brightness, circularity and size (which the user can choose from a pop up menu), alternatively it can run a user custom-made image analysis routine.
  * 	Such routine should be designed by the user at its convenience but its result should always be a binary image of detected objects.
- * 	HCS-Analysis measures any variable from ImageJ's set Measurement's menu (which the user can choose from a pop-up menu). Object detection channel and measurement channel do not need to be the same.
- * 	(both can be set easily in a pop-up  menu).
+ * 	HCS-Analysis measures any variable from ImageJ's set Measurement's menu (which the user can choose from a pop up menu). Object detection channel and measurement channel do not need to be the same.
+ * 	(both can be set easily in menu).
  * 	Morphological measurements are given in pixel units. Objects holes are filled prior to measuring.
- * 	HCS-Check-Results.ijm is a macro that was designed to be used with HCS-Analysis.ijm. It does show the detected objects in its original images so the user can
- * 	check wether object detection is being done properly.
+ * 	HCS-Check-Results.ijm is a macro that is designed to be used with HCS-Analysis.ijm. It does show the detected objects in its original images so the user can check wether object detection is being done properly.
  * 	HCS-Check-Results will be automatically installed when the "check results" option is selected when running HCS-Analysis.
- * 	HCS-Check-Results.ijm should be saved in imageJ's Macro's folder.
+ * 	HCS-Check-Results.ijm should be saved in imageJ's Plugin folder.
  * 	HCS-Analysis creates a text file when executed (HCS-Check-Results-parameters.txt) in which it saves the parameters needed by HCS-Check-Results to work.
  * 	HCS-Analysis saves the following data on a result's folder:
- * 	- objects' measurments in a file per whell. Such files are organized in three folders containing: positive controls, negative controls and experimental conditions.
+ * 	- objects' measurments in a file per well. Such files are organized in three folders, containing: positive controls, negative controls and experimental conditions.
  * 		A resume containing variables means per well is also created.
  * 	- a ROIs' folder, containing all objects' detected ROIs per image.
  * 	- an "HCS Analyis resume.txt"  text file containing the analysis results (z´, z-scores, ...) and parameters (thresholding parameters, launchement data, ...).
  */
 
-
 ///////////////Set up block
+requires("1.52");//Aborts the macro and displays an error if the user is not using imageJ v1.52 or later.
+setBatchMode(true);
 getDateAndTime(yearLaunched, monthLaunched, dayOfWeek, dayOfMonthLaunched, hourLaunched, minuteLaunched, second, msec);//will be saved in HCS Analyis resume.txt
 print("\\Clear");//empties the Log window
 run("Close All");//closes any opened image
 if(isOpen("Results"))//empties the results window
-{
-	IJ.deleteRows(0, nResults); 
-}
+{IJ.deleteRows(0, nResults);}
 roiManager("reset");
 var posControlNamesArray;
 var negControlNamesArray;
+var experimentalNamesArray;
 var nChannels;
+var zScoreArray;
+///////////////End of set up block
 
 // GUI-1 dialog's box creation***************************************************************
 Dialog.create("HCS-Analysis");
@@ -54,9 +55,7 @@ Dialog.show;
 processData=Dialog.getCheckbox();
 checkResults=Dialog.getCheckbox();
 if(processData==0 && checkResults==0)
-{
-	exit("The macro has been exited.\nNeither data processing nor results checking were selected.");
-}
+{exit("The macro has been exited.\nNeither data processing nor results checking were selected.");}
 
 // GUI-2 dialog's box creation***************************************************************
 Dialog.create("HCS-Analysis");
@@ -94,7 +93,17 @@ Dialog.create("HCS-Analysis");
 Dialog.setInsets(0,0,0);
 Dialog.addMessage(imagesNamesArray[0]);
 Dialog.setInsets(0,0,0);
-Dialog.addMessage("Write the digits in the image's name above that codify the well plate's row and column:");
+Dialog.addMessage("Write the digits in the image's name above that codify the well plate's row:");
+for(i=1;i<=lengthOf(firstImageNameWithoutExtension);i++)
+{
+	Dialog.addString("", ".", 1);
+	if(i<lengthOf(firstImageNameWithoutExtension))
+	{Dialog.addToSameRow();}
+}
+Dialog.addToSameRow();
+Dialog.addMessage(".tif");
+Dialog.setInsets(0, 0, 0);
+Dialog.addMessage("Write the digits in the image's name above that codify the well plate's column:");
 for(i=1;i<=lengthOf(firstImageNameWithoutExtension);i++)
 {
 	Dialog.addString("", ".", 1);
@@ -115,11 +124,11 @@ Dialog.addNumber("Enter the number of experimental samples: ", 0);
 Dialog.addNumber("Enter the number of channels that were captured per field: ", 0);
 Dialog.show;
 //GUI-3 dialog's box values retrieving*******************************************************
-regExArray=newArray(lengthOf(firstImageNameWithoutExtension));//This array contains "." in the meaningless image name digits and a character in the digits that codifiy the row and column of the well the image comes from
+regExRowArray=newArray(lengthOf(firstImageNameWithoutExtension));//This array contains "." in the meaningless image name digits and a character in the digits that codifiy the row and column of the well the image comes from
 for(i=0;i<lengthOf(firstImageNameWithoutExtension);i++)
 {
-	regExArray[i]=".";
-	print("regExArray["+i+"]: "+regExArray[i]);
+	regExRowArray[i]=".";
+	print("regExRowArray["+i+"]: "+regExRowArray[i]);
 }
 for(i=0;i<(lengthOf(firstImageNameWithoutExtension));i++)
 {
@@ -128,10 +137,43 @@ for(i=0;i<(lengthOf(firstImageNameWithoutExtension));i++)
 	print("currentDigit: "+currentDigit);
 	if(currentDigit!=".")
 	{
-		regExArray[i]=currentDigit;
-		print("regExArray["+i+"]: "+regExArray[i]);
+		regExRowArray[i]=currentDigit;
+		print("regExRowArray["+i+"]: "+regExRowArray[i]);
 	}
 }
+regExColumnArray=newArray(lengthOf(firstImageNameWithoutExtension));//This array contains "." in the meaningless image name digits and a character in the digits that codifiy the row and column of the well the image comes from
+for(i=0;i<lengthOf(firstImageNameWithoutExtension);i++)
+{
+	regExColumnArray[i]=".";
+	print("regExColumnArray["+i+"]: "+regExColumnArray[i]);
+}
+for(i=0;i<(lengthOf(firstImageNameWithoutExtension));i++)
+{
+	currentDigit=Dialog.getString();
+	print("--------- i: "+i+" --------");
+	print("currentDigit: "+currentDigit);
+	if(currentDigit!=".")
+	{
+		regExColumnArray[i]=currentDigit;
+		print("regExColumnArray["+i+"]: "+regExColumnArray[i]);
+	}
+}
+regExArray=newArray(lengthOf(regExColumnArray));
+for(i=0; i<lengthOf(regExArray);i++)
+{
+	if(regExRowArray[i] !=".")
+	{regExArray[i]=regExRowArray[i];}
+	else if(regExColumnArray[i] !=".")
+	{regExArray[i]=regExColumnArray[i];}
+	else{regExArray[i]=".";}
+}
+print("regExRowArray: ");
+Array.print(regExRowArray);
+print("regExColumnArray: ");
+Array.print(regExColumnArray);
+print("regExArray: ");
+Array.print(regExArray);
+
 regEx="";//This is a string made of the succession of elements of regExArray
 for(i=0;i<lengthOf(firstImageNameWithoutExtension);i++)
 {
@@ -148,7 +190,7 @@ nChannels=Dialog.getNumber();
 print("nChannels: "+nChannels);
 //End of GUI-3 dialog's box value retrieving*************************************************
 
-textFile=File.open(resultsDir+"HCS Analyis resume.txt");// z', zvalues and settings are going to be saved in this file
+textFile=File.open(resultsDir+"HCS Analyis resume.txt");// z', z-scores and settings are going to be saved in this file
 print(textFile, "---------------HCS Analysis Results---------------");
 print(textFile," ");
 // GUI-4 dialog's box creation***************************************************************
@@ -168,8 +210,8 @@ Dialog.addChoice("Choose the channel in which you want to detect objects", detec
 Dialog.setInsets(0,0,0);
 Dialog.addMessage("Choose a thresholding method:");
 Dialog.addCheckbox("Select objects that fulfill:", true);
-Dialog.addNumber("pixels are brighter than:", 312);
-Dialog.addNumber("pixels are less bright than:", 65535);
+Dialog.addNumber("pixels are brighter than:", 250);
+Dialog.addNumber("pixels are less bright than:", 4095);
 Dialog.addNumber("circularity is bigger than:", 0.6);
 Dialog.addNumber("size in pixels is smaller than:", 1700);//should be "Infinity" by default
 Dialog.addNumber("size in pixels is bigger than:", 190);
@@ -246,17 +288,10 @@ if(booleanGetUsersThresholdingRoutineDir==true)
 {usersThresholdingRoutineDir = File.openDialog("Choose the thresholding routine's");}//This is considered another GUI
 print("usersThresholdingRoutineDir: "+usersThresholdingRoutineDir);
 //End of GUI-4 dialog's box value retrieving*************************************************
-
 if(applyThreshold==1 && applyUsersThresholdingRoutine==1)
-{
-	exit("Two thresholding methods have been selected.\nPlease choose only one and run the macro again.");
-}
-
+{exit("Two thresholding methods have been selected.\nPlease run the macro again and choose only one.");}
 if(applyThreshold==0 && applyUsersThresholdingRoutine==0)
-{
-	exit("No thresholding method has been selected.\nPlease choose one and run the macro again.");
-}
-
+{exit("No thresholding method has been selected.\nPlease run the macro again and choose one.");}
 
 // GUI-5 dialog's box creation***************************************************************
 controlLabelsArray=newArray(nPos+nNeg);
@@ -268,7 +303,6 @@ for(i=1; i<=lengthOf(controlLabelsArray);i++)
 	else
 	{controlLabelsArray[i-1]="Negative Control "+i-nPos;}
 	print("controlLabelsArray["+i-1+"]: "+controlLabelsArray[i-1]);
-	
 }
 Dialog.create("HCS-Analysis");
 Dialog.setInsets(0,0,0);
@@ -280,7 +314,7 @@ for(i=1; i<=lengthOf(controlLabelsArray);i++)
 Dialog.setInsets(0,0,0);
 Dialog.addMessage("What do you want to do?");
 doLabels=newArray("Get z'", "Get z-score for all experimental groups");
-doDefaults=newArray(0,0);
+doDefaults=newArray(1,1);
 Dialog.setInsets(0,50,0);
 Dialog.addCheckboxGroup( 2, 1, doLabels, doDefaults);
 Dialog.show;
@@ -288,6 +322,7 @@ Dialog.show;
 booleanGetControlsDir=Dialog.getCheckbox();
 posControlNamesArray=newArray(nPos);
 negControlNamesArray=newArray(nNeg);
+experimentalNamesArray=newArray(nExp);
 if(booleanGetControlsDir==true)
 {
 	for(i=0; i<nPos+nNeg; i++)
@@ -326,19 +361,17 @@ else
 }
 computeZ=Dialog.getCheckbox();
 print("computeZ: "+computeZ);
-computeZFactor=Dialog.getCheckbox();
-print("computeZFactor: "+computeZFactor);
+computeZScores=Dialog.getCheckbox();
+print("computeZScores: "+computeZScores);
+/*if(computeZ==false && computeZScores==false)
+{
+	exit("Neither \"Get z'\" nor \"Get Z-scores\" were selected.\nPlease run the macro again and choose at least one.");
+}*/
 //End of GUI-5 dialog's box value retrieving*************************************************
 //End of GUIs--------------------------------------------------------------------
 //_______________________________________________________________________________
 //_______________________________________________________________________________
-//Next block of code is going to compute z-scores and z'
-//It will first compute the average and standard deviation of variables in negative controls (c-).
-//In a loop for each c-
-//1- get c- results
-//2- get averages per well for each varible, save in a resume table
-//3- get average and standard deviation of means from the previous Table, save in two vectors: meansArray= aver-var1, aver-var2, aver-var3. and stdDevArray=sd-var2, sd-var2, sd-var3.
-//General measurement block
+
 measurementsString="";//to be used in the setMeasurements command
 resultsString="";//to be printed in HCS Analyis resume.txt
 if(area==true)
@@ -400,7 +433,7 @@ if(ferets==true)
 {
 	measurementsString=measurementsString+" feret's";
 	resultsString=resultsString+"feret's diameter (including angle and starting coordinates), minimum feret's diameter, ";
-	}
+}
 if(integrated==true)
 {
 	measurementsString=measurementsString+" integrated";
@@ -414,26 +447,25 @@ if(median==true)
 if(skewness==true)
 {
 	measurementsString=measurementsString+" skewness";
-	resultsString=resultsString+"skewness (third order moment about the mean), ";
+	resultsString=resultsString+"skewness (third order moment about the mean), ";	
 }
 if(kurtosis==true)
 {
 	measurementsString=measurementsString+" kurtosis";
 	resultsString=resultsString+"kurtosis (fourth order moment about the mean), ";
-	}
+}
 if(areaFraction==true)
 {
 	measurementsString=measurementsString+" area_fraction";
-	resultsString=resultsString+"area fraction, ";
+	resultsString=resultsString+"area fraction, ";	
 }
 if(stack==true)
 {
 	measurementsString=measurementsString+" stack";
-	resultsString=resultsString+"stack's slice position, ";
+	resultsString=resultsString+"stack's slice position, ";	
 }
 print("measurementsString: "+measurementsString);
 
-////////////////////////////////1- get c- results
 File.makeDirectory(resultsDir+"Negative Controls"); 
 negResultsDir=resultsDir+"Negative Controls\\";
 print("negResultsDir: "+negResultsDir);
@@ -444,32 +476,164 @@ expResultsDir=resultsDir+"Experimental conditions\\";
 
 var headingsArray;
 var meansArray;
-var stdDevArray;
-if(computeZ==true)
+var meanMeansArray;
+var stdDevMeansArray;
+
+meansCalculator(negControlNamesArray, nNeg, negResultsDir, "negative control");
+negControlMeansArray=meansArray;
+print("negControlMeansArray: ");
+Array.print(negControlMeansArray);
+print("headingsArray: ");
+Array.print(headingsArray);
+nVariables=lengthOf(headingsArray)-2;
+print("nVariables: "+nVariables);
+print("negControlNamesArray: ");
+Array.print(negControlNamesArray);
+print("negative control savingDir: "+negResultsDir);
+
+meansCalculator(posControlNamesArray, nPos, posResultsDir, "positive control");
+posControlMeansArray=meansArray;
+print("posControlMeansArray: ");
+Array.print(posControlMeansArray);
+print("posControlNamesArray: ");
+Array.print(posControlNamesArray);
+print("positive control savingDir: "+posResultsDir);
+
+meansCalculator(imagesNamesArray, nExp, expResultsDir, "experimental");
+expMeansArray=meansArray;
+print("expMeansArray: ");
+Array.print(expMeansArray);
+print("experimentalNamesArray: ");
+Array.print(experimentalNamesArray);
+print("experimental savingDir: "+expResultsDir);
+
+createResumeTable(negControlMeansArray, nNeg, negControlNamesArray, negResultsDir);
+negControlMeanMeansArray=meanMeansArray;
+print("negControlMeanMeansArray: ");
+Array.print(negControlMeanMeansArray);
+negControlStdDevMeansArray=stdDevMeansArray;
+print("negControlStdDevMeansArray: ");
+Array.print(negControlStdDevMeansArray);
+
+createResumeTable(posControlMeansArray, nPos, posControlNamesArray, posResultsDir);
+posControlMeanMeansArray=meanMeansArray;
+print("posControlMeanMeansArray: ");
+Array.print(posControlMeanMeansArray);
+posControlStdDevMeansArray=stdDevMeansArray;
+print("posControlStdDevMeansArray: ");
+Array.print(posControlStdDevMeansArray);
+
+createResumeTable(expMeansArray, nExp, experimentalNamesArray, expResultsDir);
+expMeanMeansArray=meanMeansArray;
+print("expMeanMeansArray: ");
+Array.print(expMeanMeansArray);
+expStdDevMeansArray=stdDevMeansArray;
+print("expStdDevMeansArray: ");
+Array.print(expStdDevMeansArray);
+
+Table.deleteRows(Table.size("resume table")-2, Table.size("resume table"), "resume table");
+//Table.update("resume table");
+counter3=0;//
+firstInsertPosition=Table.size("resume table");//Next block enters the negative control values into the resume table
+for(i=0; i<lengthOf(negControlNamesArray);i++)
 {
-	meansCalculator(negControlNamesArray, nNeg, negResultsDir, "negative controls resume");
-	Array.print(meansArray);
-	Array.print(stdDevArray);
-	negControlMeansArray=meansArray;
-	Array.print(negControlMeansArray);
-	negControlStdDevArray=stdDevArray;
-	Array.print(negControlStdDevArray);
-	
-	meansCalculator(posControlNamesArray, nPos, posResultsDir, "positive controls resume");
-	Array.print(meansArray);
-	Array.print(stdDevArray);
-	posControlMeansArray=meansArray;
-	Array.print(posControlMeansArray);
-	posControlStdDevArray=stdDevArray;
-	Array.print(posControlStdDevArray);
-	
+	Table.set("Well", i+firstInsertPosition, negControlNamesArray[i]);
+	rowName="";
+	columnName="";
+	for(j=0;j<lengthOf(regExRowArray);j++)
+	{
+		if(regExRowArray[j] !=".")
+		{rowName=rowName+substring(negControlNamesArray[i], j, j+1);}
+		if(regExColumnArray[j] !=".")
+		{columnName=columnName+substring(negControlNamesArray[i], j, j+1);}
+		print("rowName: "+rowName+" columnName: "+columnName);
+	}
+	Table.set("ROW", i+firstInsertPosition, rowName);
+	Table.set("COL", i+firstInsertPosition, columnName);
+	for(j=2;j<lengthOf(headingsArray);j++)
+	{
+		Table.set(headingsArray[j], i+firstInsertPosition, negControlMeansArray[counter3]);
+		counter3++;
+	}
+}
+counter4=0;//
+firstInsertPosition=Table.size("resume table");//Next block enters the positive control values into the resume table
+for(i=0; i<lengthOf(posControlNamesArray);i++)
+{
+	Table.set("Well", i+firstInsertPosition, posControlNamesArray[i]);
+	rowName="";
+	columnName="";
+	for(j=0;j<lengthOf(regExRowArray);j++)
+	{
+		if(regExRowArray[j] !=".")
+		{rowName=rowName+substring(posControlNamesArray[i], j, j+1);}
+		if(regExColumnArray[j] !=".")
+		{columnName=columnName+substring(posControlNamesArray[i], j, j+1);}
+		print("rowName: "+rowName+" columnName: "+columnName);
+	}
+	Table.set("ROW", i+firstInsertPosition, rowName);
+	Table.set("COL", i+firstInsertPosition, columnName);
+	for(j=2;j<lengthOf(headingsArray);j++)
+	{
+		Table.set(headingsArray[j], i+firstInsertPosition, posControlMeansArray[counter4]);
+		counter4++;
+	}
+}
+Table.deleteColumn(" ");
+Table.showRowNumbers(false, "resume table");
+
+//Next block computes z-Scores
+if(computeZScores==true)
+{
+	print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+	Array.print(expMeansArray);
+	Array.print(expMeanMeansArray);
+	Array.print(expStdDevMeansArray);
+	zScoresArray=newArray(nExp*nVariables);
+	counter5=0;
+	for(i=0; i<nExp*nVariables; i++)
+	{
+		if(counter5==nVariables)
+		{counter5=0;}
+		print("i: "+i+" counter5: "+counter5);
+		zScoresArray[i]=(expMeansArray[i]-expMeanMeansArray[counter5])/expStdDevMeansArray[counter5];
+		counter5++;
+	}
+	print("zScoresArray: ");
+	Array.print(zScoresArray);
+	//Next block enters the z-scores values into the resume table
+	counter8=0;
+	for(i=0; i<Table.size("resume table");i++)
+	{
+		for(j=2;j<lengthOf(headingsArray);j++)
+		{
+			if(counter8<lengthOf(zScoresArray))
+			{
+			Table.set(headingsArray[j]+" z-score", i, zScoresArray[counter8]);
+			counter8++;			
+			}
+			else
+			{
+			Table.set(headingsArray[j]+" z-score", i, "");//fills the table with an empty string in order to improve appearance and as an Orange software requisite
+			}
+		}
+	}
+}
+
+Table.save(resultsDir+"means resume.tab");
+selectWindow("resume table");
+run("Close");
+
+if(computeZ==true)//Next block of code computes z'
+{	
 	print("---------+++++++++");
+	print("headingsArray: ");
 	Array.print(headingsArray);
 	
-	zPrimeArray=newArray(lengthOf(negControlMeansArray));
+	zPrimeArray=newArray(lengthOf(negControlMeanMeansArray));
 	for(i=0; i<lengthOf(zPrimeArray); i++)
 	{
-		zPrimeArray[i]=1-3*(posControlStdDevArray[i]+negControlStdDevArray[i])/abs(posControlMeansArray[i]-negControlMeansArray[i]);
+		zPrimeArray[i]=1-3*(posControlStdDevMeansArray[i]+negControlStdDevMeansArray[i])/abs(posControlMeanMeansArray[i]-negControlMeanMeansArray[i]);
 	}
 	Array.print(zPrimeArray);
 	
@@ -479,7 +643,7 @@ if(computeZ==true)
 	{
 	Table.set(headingsArray[i], 0, zPrimeArray[i-2]);
 	}
-	Table.update;
+	//Table.update;
 	Table.save(resultsDir+"z-prime resume.txt");
 	selectWindow("z-prime resume");
 	//next code is writting the z-prime table to a text file
@@ -499,9 +663,42 @@ if(computeZ==true)
 	selectWindow("z-prime resume");
 	run("Close");
 }
-if(computeZFactor==true)
-{meansCalculator(imagesNamesArray, nExp, expResultsDir, "experimental wells resume");}//This is the last time meansCalculator() executes
-//Next code is filling HCS Analyis resume.txt
+
+//Next block is filling HCS Analyis resume.txt with z-scores
+if(computeZScores==true)
+{
+	print(textFile, "");
+	print(textFile, "_______________ z-scores _______________");
+	print(textFile,"");
+	writingString="		Sample";
+	for(i=2; i<lengthOf(headingsArray); i++)
+	{
+		writingString=writingString+"	"+headingsArray[i];
+	}
+	print("writingString: "+writingString);
+	print(textFile, writingString);
+	
+	counter6=0;
+	counter7=0;
+	for(i=0; i<nExp;i++)
+	{
+		writingString="		"+experimentalNamesArray[i];
+		while(counter7<nVariables)
+		{
+			writingString=writingString+"	"+zScoresArray[counter6];
+			counter6++;
+			counter7++;
+		}
+		counter7=0;
+		print(textFile, writingString);
+	}
+}
+if(isOpen("Results"))
+{
+	selectWindow("Results");
+	run("Close");
+}
+//Next block is filling HCS Analyis resume.txt with general information
 print(textFile, "");
 print(textFile, "Launched on: "+dayOfMonthLaunched+"/"+monthLaunched+"/"+yearLaunched+", "+hourLaunched+":"+minuteLaunched);
 getDateAndTime(yearFinished, monthFinished, dayOfWeek, dayOfMonthFinished, hourFinished, minuteFinished, second, msec);
@@ -549,7 +746,7 @@ if(checkResults==0)
 {
 	showMessage("HCS-Analysis", "The macro is done.\nResults can be found at: "+resultsDir);
 }
-}//enf of if (processData==true)
+}//end of if (processData==true)
 
 if(checkResults==true)
 {
@@ -564,7 +761,17 @@ if(checkResults==true)
 		Dialog.setInsets(0,0,0);
 		Dialog.addMessage(imagesNamesArray[0]);
 		Dialog.setInsets(0,0,0);
-		Dialog.addMessage("Write the digits in the image's name above that codify the well plate's row and column:");
+		Dialog.addMessage("Write the digits in the image's name above that codify the well plate's row:");
+		for(i=1;i<=lengthOf(firstImageNameWithoutExtension);i++)
+		{		
+			Dialog.addString("", ".", 1);
+			if(i<lengthOf(firstImageNameWithoutExtension))
+			{Dialog.addToSameRow();}
+		}
+		Dialog.addToSameRow();
+		Dialog.addMessage(".tif");
+		Dialog.setInsets(0, 0, 0);
+		Dialog.addMessage("Write the digits in the image's name above that codify the well plate's column:");
 		for(i=1;i<=lengthOf(firstImageNameWithoutExtension);i++)
 		{
 			Dialog.addString("", ".", 1);
@@ -576,17 +783,16 @@ if(checkResults==true)
 		Dialog.addToSameRow();
 		Dialog.addMessage(".tif");
 		Dialog.setInsets(0,0,0);
-		Dialog.addMessage("(Respect digits positions, leave \".\" in unused positions.)");
+		Dialog.addMessage("(Respect digits positions, leave \".\" in unused positions).");
 		Dialog.setInsets(0,0,0);
-		Dialog.addMessage("(Use a single character per box.)");
-		Dialog.addNumber("Enter the number of channels that were captured per well: ", 0);
+		Dialog.addMessage("(Use a single character per box).");
+		Dialog.addNumber("Enter the number of channels that were captured per field: ", 0);
 		Dialog.show;
-		//GUI-3 dialog's box values retrieving*******************************************************
-		regExArray=newArray(lengthOf(firstImageNameWithoutExtension));//This array contains "." in the meaningless image name digits and a character in the digits that codifiy the row and column of the well the image comes from
+		regExRowArray=newArray(lengthOf(firstImageNameWithoutExtension));//This array contains "." in the meaningless image name digits and a character in the digits that codifiy the row and column of the well the image comes from
 		for(i=0;i<lengthOf(firstImageNameWithoutExtension);i++)
 		{
-			regExArray[i]=".";
-			print("regExArray["+i+"]: "+regExArray[i]);
+			regExRowArray[i]=".";
+			print("regExRowArray["+i+"]: "+regExRowArray[i]);
 		}
 		for(i=0;i<(lengthOf(firstImageNameWithoutExtension));i++)
 		{
@@ -595,16 +801,48 @@ if(checkResults==true)
 			print("currentDigit: "+currentDigit);
 			if(currentDigit!=".")
 			{
-				regExArray[i]=currentDigit;
-				print("regExArray["+i+"]: "+regExArray[i]);
+				regExRowArray[i]=currentDigit;
+				print("regExRowArray["+i+"]: "+regExRowArray[i]);
 			}
-		}	
+		}
+		regExColumnArray=newArray(lengthOf(firstImageNameWithoutExtension));//This array contains "." in the meaningless image name digits and a character in the digits that codifiy the row and column of the well the image comes from
+		for(i=0;i<lengthOf(firstImageNameWithoutExtension);i++)
+		{
+			regExColumnArray[i]=".";
+			print("regExColumnArray["+i+"]: "+regExColumnArray[i]);
+		}
+		for(i=0;i<(lengthOf(firstImageNameWithoutExtension));i++)
+		{
+			currentDigit=Dialog.getString();
+			print("--------- i: "+i+" --------");
+			print("currentDigit: "+currentDigit);
+			if(currentDigit!=".")
+			{
+				regExColumnArray[i]=currentDigit;
+				print("regExColumnArray["+i+"]: "+regExColumnArray[i]);
+			}
+		}
+		regExArray=newArray(lengthOf(regExColumnArray));
+		for(i=0; i<lengthOf(regExArray);i++)
+		{
+			if(regExRowArray[i] !=".")
+			{regExArray[i]=regExRowArray[i];}
+			else if(regExColumnArray[i] !=".")
+			{regExArray[i]=regExColumnArray[i];}
+			else{regExArray[i]=".";}
+		}
+		print("regExRowArray: ");
+		Array.print(regExRowArray);
+		print("regExColumnArray: ");
+		Array.print(regExColumnArray);
+		print("regExArray: ");
+		Array.print(regExArray);
 		nChannels=Dialog.getNumber();
 		print("nChannels: "+nChannels);
 	}
 
-	run("Install...", "install="+getDirectory("macros")+"HCS-Check-Results.ijm");
-	parametersFile=File.open(getDirectory("macros")+"HCS-Check-Results-parameters.txt");
+	run("Install...", "install="+getDirectory("plugins")+"HCS-Check-Results.ijm");
+	parametersFile=File.open(getDirectory("plugins")+"HCS-Check-Results-parameters.txt");
 	print(parametersFile, "nChannels: "+nChannels);
 	print(parametersFile, "resultsDir: "+resultsDir);
 	for(i=0;i<lengthOf(regExArray);i++)
@@ -614,33 +852,38 @@ if(checkResults==true)
 	File.close(parametersFile);
 	if(processData==true)
 	{
-		showMessage("HCS-Analysis", "The macro is done.\nResults can be found at: "+resultsDir+".\nPress \"OK\", then:\nPress \"1\" to check detected objects on a single image.\nPress \"2\" to check detected objects on a whole well.");
+		showMessage("HCS-Analysis", "The macro is done.\nResults can be found at: "+resultsDir+".\nPress \"OK\", then:\nPress \"1\" to check detected objects on a single image.\nPress \"2\" to check detected objects on a whole well.\nPress \"3\" to stop checking results.");
 	}
 	else
 	{
-		showMessage("HCS-Analysis", "The macro is done.\nPress \"OK\", then:\nPress \"1\" to check detected objects on a single image.\nPress \"2\" to check detected objects on a whole well.");
+		showMessage("HCS-Analysis", "The macro is done.\nPress \"OK\", then:\nPress \"1\" to check detected objects on a single image.\nPress \"2\" to check detected objects on a whole well.\nPress \"3\" to stop checking results.");
 	}
 }
+setBatchMode(false);
 
+/////////////////////   FUNCTIONS BLOCK   ////////////////////////////////////////////////////////////////////////
 
-/////////////////////FUNCTIONS BLOCK
-
-function meansCalculator(namesArray, nWells, savingDir, resumeName){//Function begins
+function meansCalculator(namesArray, nWells, savingDir, condition){//Function begins
 // parameters:namesArray (negControlNamesArray, posControlNamesArray, imagesNamesArray), nWells(nPos, nNeg, nExp), savingDir (negResultsDir, posResultsDir,
-//expResultsDir), resumeName (negative controls resume, positive controls resume, experimental wells resume); output: meansArray and stdDevArray  which are renamed 
-//(negControlMeansArray, posControlMeansArray, expMeansArray, negControlsStdDev, posControlsStdDev, expStdDev) after the funcion has been called.
-//positive controls resume and negative controls resume table are also created. They contain the means per well of each measured variable, the mean of means and the standard
-//deviation of means. This values are needed for calculating z' and are stored in meansArray and stdDevArray.
-//The experimental wells resume table does contain the mean per well of each measured variable. Mean of means and stDev of means are meaningless and therefore are not calculated.
-
+//expResultsDir), condition (negative control, positive control, experimental);
+//Output: 
+//1: meansArray which is renamed negControlMeansArray, posControlMeansArray or expMeansArray after the funcion has been called.
+//2: posControlNamesArray, negControlNamesArray or experimentalNamesArray. Those arrays contain the names of negative, positive or experimental samples.
+//3: a results file per sample, containing all objects measurements per variable; a resume file per condition, containing the mean measurement for each variable and condition.
+//Each element of meansArray contains the average of all measured objects in a condition for a variable. The first element in the negControlMeansArray contains
+//the average of the first negative control objects for the first variable, the second element in the array contains the average of the first negative control sample
+//for the second variable, ..., the 4th element contains the average of the second negative control sample for the first variable, ... 
+//This values are needed for calculating z' and z-scores.
+meansArrayElement=0;//Used to fill meansArray
 for(i=0; i<nWells; i++)
 {//loop for each well
 	wellROIsCounter=0;//It is going to be used later on to name ROIs in the ROIManager, in the same way as numbers in the well's results window
 	if(isOpen("Results")){IJ.deleteRows(0, nResults);}//empties the Results Window
 	print("---------i: "+i+"---------");
-	if(resumeName=="experimental wells resume"){imageName=imagesNamesArray[0];}//imagesNamesArray is going to decrease in size because analyzed images are erased afterwards, consecuently imagesNamesArray[0] is going to change once the images of a well have been analyzed
+	if(condition=="experimental"){imageName=imagesNamesArray[0];}//imagesNamesArray is going to decrease in size because analyzed images are erased afterwards, consecuently imagesNamesArray[0] is going to change once the images of a well have been analyzed
 	else{imageName=namesArray[i];}
 	print("imageName: "+imageName);//This is the name of an image on a well
+	
 	newRegEx="";//this string will contain the regular expression that allows for opening all images on a well
 	for(k=0; k<lengthOf(regExArray); k++)
 	{
@@ -742,8 +985,8 @@ for(i=0; i<nWells; i++)
 
 		else{print(imagesNamesArray[k]+" does not match "+ newRegEx);}	
 	}//end of loop for every image file
-
-	//////////////////////////////////2- get averages per well for each varible, save in a resume table
+	if(isOpen("Results")==false || nResults==0)
+	{exit("The macro has been exited.\nNo objects were detected in any "+condition+" sample.");}
 	selectWindow("Results");
 	print("savingDir: "+savingDir);
 	print("imageName: "+imageName);
@@ -771,18 +1014,22 @@ for(i=0; i<nWells; i++)
 		}
 	print("wellName: "+wellName);
 //next two block of code overwrite posControlNamesArray and negControlNamesArray with the well's name
-if(resumeName=="positive controls resume")
+if(condition=="positive control")
 {
 	posControlNamesArray[i]=wellName;
 }
-if(resumeName=="negative controls resume")
+else if(condition=="negative control")
 {
 	negControlNamesArray[i]=wellName;
 }
-	Table.save(savingDir+"Measurements Well "+wellName+".txt");//This saves the Results table, which contains the results of every image of a well
+else if(condition=="experimental")
+{
+	experimentalNamesArray[i]=wellName;
+}
+	Table.save(savingDir+"Measurements Well "+wellName+".txt");//This saves the Results table, which contains the results of every image on a well
 	//Next code is going to build the resume Table, which resumes the measurements of a group of wells (namely: positive control, negative control or experimental wells)
 	selectWindow("Results");
-	if(i==0)//the resume table is created only once
+	if(i==0)//headingsArray, meansArray and resultsArray are created only once
 	{
 		headingsArray=split(Table.headings, "	");//contains the names of the results table headings
 		print("lengthOf(headingsArray): "+lengthOf(headingsArray));
@@ -801,23 +1048,15 @@ if(resumeName=="negative controls resume")
 				k--;
 			}
 		}
-	
+		
 		resultsArray=newArray(nResults);//This array is going to be overwritten for each column
-		Table.create("resume table");//creates a table which is an empty copy of the Results table (without MinThr and MaxThr columns), will be saved with a different name
-		Table.set("Well", 0, 0);
-		for(k=2; k<lengthOf(headingsArray); k++)//The 0  element of headingsArray is the row number (without a name), which is set later on
-		{
-			Table.set(headingsArray[k], 0, 0);
-			Table.update;
-		}
-		Table.showRowNumbers(true);//this comand sets the row numbers column
-		Table.update;
+		meansArray=newArray((lengthOf(headingsArray)-2)*nWells);
+		print("meansArray: ");
+		Array.print(meansArray);
 	}
 	//next block of code fills the resume table
 	print("i= "+i+" newRegEx: "+wellName+"------------------");
-	selectWindow("resume table");
-	Table.set("Well", i, wellName);
-	Table.update;
+	//Table.update;
 	for(k=2; k<lengthOf(headingsArray);k++)//the first element of the headings Array is blank, the second is Label
 	{
 		print("------------"+k+"----------------");
@@ -827,93 +1066,138 @@ if(resumeName=="negative controls resume")
 		Array.print(resultsArray);
 		Array.getStatistics(resultsArray, min, max, mean,stdDev);//The results table is filled with the average per well of every variable
 		print(mean);
-		selectWindow("resume table");
-		Table.set(headingsArray[k], i, mean);
-		Table.update;
-		if(resumeName=="experimental wells resume")
-		{
-			if(i==0&&k==2)//z-value resume table is created only once
-			{
-				Table.create("z-value resume");
-				Table.set("Well", i, 0);
-				for(l=2; l<lengthOf(headingsArray); l++)
-				{Table.set(headingsArray[l], 0, 0);}
-				Table.update;				
-			}
-			selectWindow("z-value resume");
-			print("++++++++++++++   k="+k+"    i="+i+"++++++++++++++++++++++++++++++++++++++++++++++++++++++");
-			print("std= "+stdDev+" negControlStdDevArray["+k-2+"]: "+negControlStdDevArray[k-2]+"mean: "+mean+" negControlMeansArray["+k-2+"]: "+negControlMeansArray[k-2]);
-			zValue=1-3*(stdDev+negControlStdDevArray[k-2])/abs(mean-negControlMeansArray[k-2]);
-			print("zvalue: "+zValue);
-			selectWindow("z-value resume");
-			Table.set(headingsArray[k], i, zValue);
-			Table.set("Well", i, wellName);
-			Table.update;
-		}
-	
-		
+		meansArray[meansArrayElement]=mean;
+		print("meansArray["+meansArrayElement+"]: "+meansArray[meansArrayElement]);
+		meansArrayElement++;
 	}
 }//end of loop for each well
 IJ.deleteRows(0, nResults); //empties the results window
-//3- get average and standard deviation of means from the previous Table, save in two vectors: meansArray= aver-var1, aver-var2, aver-var3. and stdDevArray=sd-var2, sd-var2, sd-var3.
-if(resumeName=="experimental wells resume")
-{
-	selectWindow("z-value resume");
-	Table.save(resultsDir+"z-value resume.txt");
-	//Next block of code writes the z-value resume table to a text file
-	print(textFile, "");
-	print(textFile, "_______________ z-values _______________");
-	print(textFile,"");
-	print(textFile, "	"+Table.headings);
-	zValueHeadingsArray=split(Table.headings, "	");
-	for(i=0;i<Table.size;i++)
+}//meansCalculator function ends
+
+/*
+ * Next function computes the average zScore per well of an array containing all values of a variable.
+ * Parameters: array (array that contains all values of a variable), indexesArray (array that contains the indexes of the elements in the previous array of the first element
+ * of each well), zScoreArrayPosition (variable, that counts the position of the zScoreArray that is going to be filled in), zScoreArray (array that contains all zScores of all
+ * variables of an experiment);
+ */
+function computeZScore(array, indexesArray, zScoreArrayPosition, zScoreArray){
+	print("zScoreArrayPosition antes: "+zScoreArrayPosition);
+	Array.getStatistics(array, min, max, mean, stdDev);
+	array=Array.copy(array);//zScore values are going to be overwriten in the original array
+	for(l=0;l<lengthOf(array);l++)
 	{
-		string="";
-		for(j=0;j<lengthOf(zValueHeadingsArray);j++)
-		{
-			string=string+"	"+Table.getString(zValueHeadingsArray[j], i);
-		}
-		print(textFile, string);
+		array[l]=(array[l]-mean)/stdDev;
+		print("array["+l+"]: "+array[l]);
 	}
-	selectWindow("z-value resume");
-	run("Close");
-}
-selectWindow("resume table");
-//The mean of means and the stDev of means is only calculated in control wells (this means at least two positive and negative control wells exist)
-if(resumeName=="negative controls resume"||resumeName=="positive controls resume")
-{
-	emptyStringArray=newArray(Table.size);
-	for(i=0;i<Table.size;i++)
+	start=0;
+	for(l=0;l<lengthOf(indexesArray);l++)
 	{
-	emptyStringArray[i]=" ";
+	end=indexesArray[l]+1;
+	print("l: "+l+" start: "+start+" end: "+end);
+	zScoresWellArray=Array.slice(array, start, end);
+	Array.print(zScoresWellArray);
+	Array.getStatistics(zScoresWellArray, min, max, mean, stdDev);
+	zScore=mean;
+	print("zScore well "+zScoreArrayPosition+": "+zScore);
+	zScoreArray[zScoreArrayPosition]=zScore;
+	start=end;
+	zScoreArrayPosition++;
 	}
-	incompleteResumeLabelsArray=newArray("mean", "std dev");
-	resumeLabelsArray=Array.concat(emptyStringArray, incompleteResumeLabelsArray);
-	Table.setColumn(" ", resumeLabelsArray);
-	Table.update;
-	
-	size=Table.size;
-	print("size: "+size);
-	meansArray=newArray(lengthOf(headingsArray)-2);
-	stdDevArray=newArray(lengthOf(headingsArray)-2);
-	for(i=2; i<lengthOf(headingsArray);i++)
-	{
-		resultsArray=Table.getColumn(headingsArray[i]);
-		Array.getStatistics(resultsArray, min, max, mean,stdDev);
-		Table.set(headingsArray[i], size-2, mean);
-		meansArray[i-2]=mean;
-		Table.set(headingsArray[i], size-1, stdDev);
-		stdDevArray[i-2]=stdDev;
-		Table.update;
-	}
-	Array.print(meansArray);
-	Array.print(stdDevArray);
+	return zScoreArrayPosition;
 }
 
-Table.save(savingDir+resumeName+".txt");
-selectWindow("resume table");
-run("Close");
-}//Function ends
-//FUNCTION ENDS___________________________________________________________________________________________
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+/*This function creates and saves the results' tables: negative controls resume.txt, positive controls resume.txt and experimental wells resume.txt
+*Parameters:
+*1-meansArray: negControlMeansArray, posControlMeansArray or expMeansArray.
+*2-nWells: nNeg, nPos or nExp.
+*3-namesArray: negControlNamesArray, posControlNamesArray or experimentalNamesArray.
+*4-savingDir: negResultsDir, posResultsDir or expResultsDir
+*/
+function createResumeTable(meansArray, nWells, namesArray, savingDir){
+meanMeansArray=newArray(nVariables);//will be renamed afterwards: negControlMeanMeansArray, posControlMeanMeansArray o expMeanMeansArray
+stdDevMeansArray=newArray(nVariables);//will be renamed afterwards: negControlStdDevMeansArray, posControlStdDevMeansArray o expStdDevMeansArray
+transientArray=newArray(nWells);//this array is going to contain the meansArray values for each variable
+for(i=1;i<=nVariables;i++)
+{
+	for(j=0;j<nWells;j++)
+	{
+		print("i: "+i+" j: "+j+" i+nVar*j: "+i+nVariables*j);
+		transientArray[j]=meansArray[i+nVariables*j-1];
+	}
+	print("i: "+i);
+	print("transientArray: ");
+	Array.print(transientArray);
+	Array.getStatistics(transientArray, min, max, mean, stdDev);
+	meanMeansArray[i-1]=mean;
+	stdDevMeansArray[i-1]=stdDev;
+}
+print("meanMeansArray: ");
+Array.print(meanMeansArray);
+print("stdDevMeansArray: ");
+Array.print(stdDevMeansArray);
+
+Table.create("resume table");
+Table.set("Well", 0, 0);
+Table.set("ROW", 0, 0);
+Table.set("COL", 0, 0);
+for(k=2; k<lengthOf(headingsArray); k++)//The 0  element of headingsArray is the row number (without a name), which is set later on
+{
+	Table.set(headingsArray[k], 0, 0);
+	//Table.update;
+}
+Table.showRowNumbers(true);//this comand sets the row numbers column
+Table.update;
+//next block fills in the first two rows in the table
+counter=0;//
+for(i=0; i<lengthOf(namesArray);i++)
+{
+	Table.set("Well", i, namesArray[i]);
+	rowName="";
+	columnName="";
+	for(j=0;j<lengthOf(regExRowArray);j++)
+	{
+		if(regExRowArray[j] !=".")
+		{rowName=rowName+substring(namesArray[i], j, j+1);}
+		if(regExColumnArray[j] !=".")
+		{columnName=columnName+substring(namesArray[i], j, j+1);}
+		print("rowName: "+rowName+" columnName: "+columnName);
+	}
+	Table.set("ROW", i, rowName);
+	Table.set("COL", i, columnName);
+	for(j=2;j<lengthOf(headingsArray);j++)
+	{
+		Table.set(headingsArray[j], i, meansArray[counter]);
+		counter++;
+	}
+}
+
+emptyStringArray=newArray(Table.size);
+for(i=0;i<Table.size;i++)
+{
+	emptyStringArray[i]=" ";
+}
+incompleteResumeLabelsArray=newArray("mean", "std dev");
+resumeLabelsArray=Array.concat(emptyStringArray, incompleteResumeLabelsArray);
+Table.setColumn(" ", resumeLabelsArray);
+counter2=0;
+insertRow1=Table.size("resume table")-2;
+insertRow2=Table.size("resume table")-1;
+for(j=2;j<lengthOf(headingsArray);j++)
+{
+	Table.set(headingsArray[j], insertRow1, meanMeansArray[counter2]);
+	Table.set(headingsArray[j], insertRow2, stdDevMeansArray[counter2]);
+	counter2++;
+}
+Table.update;
+if(endsWith(savingDir, "Negative Controls\\"))
+{savingName="negative controls resume.txt";}
+else if(endsWith(savingDir, "Positive Controls\\"))
+{savingName="positive controls resume.txt";}
+else if(endsWith(savingDir, "Experimental conditions\\"))
+{savingName="experimental wells resume.txt";}
+Table.save(savingDir+savingName);
+}
+//FUNCTION'S BLOCK ENDS___________________________________________________________________________________________
 //________________________________________________________________________________________________________
 //________________________________________________________________________________________________________
