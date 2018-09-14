@@ -49,8 +49,8 @@ if(label==true)
 		if(is("composite"))
 		{
 			run("Hyperstack to Stack");//transforms composite images to regular stacks
-			resetMinAndMax();
 			id2=getImageID();
+			resetMinAndMax();
 		}
 		roiManager("show all with labels");
 		run("Flatten", "stack");
@@ -77,6 +77,7 @@ if(label==true)
 			}
 		}	
 		run("Images to Stack", "name="+replace(imageName, " ", "_")+" title=[] use");//blank spaces need to be removed from the name
+		resetMinAndMax();
 		id2=getImageID();
 		if(roiManager("count")==0)
 		{exit("No objects were detected in this field");}
@@ -163,8 +164,10 @@ if(label==true)
 					setMetadata("Label", imagesNamesArray[i]+"-slice-"+j+1);//images are named after its labels when stacks are splat
 				}
 				if(is("composite"))
-				{run("Hyperstack to Stack");
-				resetMinAndMax();}//transforms composite images to regular stacks
+				{
+					run("Hyperstack to Stack");
+					resetMinAndMax();
+				}//transforms composite images to regular stacks
 				roiManager("show all with labels");
 				if(roiManager("count")>0)
 				{run("Flatten", "stack");}			
@@ -220,6 +223,7 @@ if(label==true)
 	}	
 	run("Images to Stack", "name="+replace(wellName, " ", "_")+" title=[] use");
 	id2=getImageID();
+	resetMinAndMax();
 	if(roiManager("count")==0)
 	{exit("No objects were detected in this well");}
 }		
