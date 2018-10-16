@@ -190,7 +190,7 @@ nChannels=Dialog.getNumber();
 print("nChannels: "+nChannels);
 //End of GUI-3 dialog's box value retrieving*************************************************
 
-textFile=File.open(resultsDir+"HCS Analyis resume.txt");// z', z-scores and settings are going to be saved in this file
+textFile=File.open(resultsDir+"HCS Analysis resume.txt");// z', z-scores and settings are going to be saved in this file
 print(textFile, "---------------HCS Analysis Results---------------");
 print(textFile," ");
 // GUI-4 dialog's box creation***************************************************************
